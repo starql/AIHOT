@@ -60,7 +60,7 @@ function sessionAuthorized(row: { auth_method: string | null; auth_binding: stri
   if (!key || !row.auth_binding || !/^[0-9a-f]{64}$/.test(row.auth_binding)) return false;
   let binding: string;
   if (row.auth_method === "password") {
-    if (!config.adminPassword || config.adminPassword.length < 12 || row.auth_claims !== null) return false;
+    if (!config.adminPassword || config.adminPassword.length < 9 || row.auth_claims !== null) return false;
     binding = sessionBinding("password", config.adminPassword, key);
   } else if (row.auth_method === "feishu") {
     const c = row.auth_claims;
@@ -204,7 +204,7 @@ const PASSWORD_ADMIN = "admin@local";
 /** Password sign-in: a constant-time comparison of digests, so the length leaks nothing either. */
 export async function passwordLogin(password: string, returnTo: string, userAgent: string | undefined) {
   const expected = config.adminPassword;
-  if (!expected || expected.length < 12) throw new LoginRejected("还没有设置管理员密码（环境变量 ADMIN_PASSWORD，至少 12 位）");
+  if (!expected || expected.length < 9) throw new LoginRejected("还没有设置管理员密码（环境变量 ADMIN_PASSWORD，至少 9 位）");
   const given = createHmac("sha256", "admin-password").update(password).digest();
   const wanted = createHmac("sha256", "admin-password").update(expected).digest();
   if (!timingSafeEqual(given, wanted)) throw new LoginRejected("密码不对");

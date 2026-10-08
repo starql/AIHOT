@@ -6,9 +6,11 @@ import type { AdminModels, BeforeJson } from "@aihot/contracts/admin";
 import { sql } from "../db.ts";
 import { capabilities, capabilityAcceptsModel, invalidateModelCache, modelSources } from "../editorial/models.ts";
 import { MODELS } from "../providers/llm.ts";
+import { chatgptConnection } from "../providers/pi-auth.ts";
 import { audit } from "../audit.ts";
 
 interface UsageRow {
+  service: string;
   purpose: string;
   model: string | null;
   prompt_version: string | null;
@@ -34,7 +36,7 @@ export async function modelsOverview(days = 7): Promise<BeforeJson<AdminModels>>
   const [sources, usage, prices, history, benches] = await Promise.all([
     modelSources(),
     sql<UsageRow[]>`
-      SELECT r.purpose, a.model, r.request->>'promptVersion' AS prompt_version, count(*)::int AS calls,
+      SELECT r.purpose, a.model, r.request->>'promptVersion' AS prompt_version, a.service, count(*)::int AS calls,
              count(*) FILTER (WHERE a.status = 'received')::int AS ok,
              count(*) FILTER (WHERE a.status = 'failed')::int AS failed,
              count(*) FILTER (WHERE a.status = 'unknown')::int AS unknown,
@@ -47,7 +49,7 @@ export async function modelsOverview(days = 7): Promise<BeforeJson<AdminModels>>
              sum(a.cost) FILTER (WHERE a.cost_basis = 'actual') AS actual_cost, max(a.currency) AS currency
       FROM receipt_attempts a JOIN receipts r ON r.id = a.receipt_id
       WHERE a.started_at >= ${since} AND a.origin = 'live' AND a.model IS NOT NULL
-      GROUP BY 1, 2, 3 ORDER BY 1, 4 DESC`,
+      GROUP BY 1, 2, 3, 4 ORDER BY 1, 5 DESC`,
     sql<{ service: string; model: string; currency: string; input_per_mtok: string | null; cached_per_mtok: string | null; output_per_mtok: string | null }[]>`
       SELECT service, model, currency, input_per_mtok, cached_per_mtok, output_per_mtok FROM service_prices`,
     sql<BeforeJson<AdminModels["history"][number]>[]>`
@@ -57,11 +59,11 @@ export async function modelsOverview(days = 7): Promise<BeforeJson<AdminModels>>
              (SELECT coalesce(jsonb_object_agg(key, value - 'sweep'), '{}'::jsonb) FROM jsonb_each(r.summary)) AS summary,
              created_at FROM selectbench_runs r ORDER BY created_at DESC LIMIT 8`,
   ]);
-  const serviceOf = (model: string) => Object.values(MODELS).find((m) => m.model === model || m.key === model)?.service ?? null;
   // Cached prompt tokens at the cache price, the rest at the input price; calls that carry their own cost
   // are not estimated again.
   const priced = (u: UsageRow) => {
-    const service = u.model ? serviceOf(u.model) : null;
+    if (u.service === "chatgpt") return null;
+    const service = u.service;
     const p = prices.find((x) => x.service === service && x.model === u.model) ?? prices.find((x) => x.service === service && x.model === "");
     if (!p || (!p.input_per_mtok && !p.output_per_mtok)) return null;
     const cached = Number(u.tokens_cached ?? 0);
@@ -93,10 +95,11 @@ export async function modelsOverview(days = 7): Promise<BeforeJson<AdminModels>>
         actualCost: u.actual_cost === null ? null : Number(u.actual_cost),
         currency: u.currency,
         estimate: priced(u),
+        ...(u.service === "chatgpt" ? { subscription: true } : {}),
       })),
   }));
   const choices = Object.values(MODELS).map((m) => ({ key: m.key, service: m.service, vision: !!m.vision }));
-  return { days, capabilities: steps, choices, history, benches };
+  return { days, capabilities: steps, choices, history, benches, chatgpt: { ...await chatgptConnection(), model: MODELS.chatgpt!.model } };
 }
 
 /** Switches a capability to another registered model (or back to the environment/default when null). */

@@ -115,11 +115,25 @@ test("effective password replacement revokes old cookies at actual read/write/ch
   await revoked(token, me.csrf);
 });
 
-for (const next of [null, "short"]) test(`password ${next === null ? "removal" : "invalid-short config"} revokes existing sessions`, async () => {
+for (const next of [null, "short", "trial-12"]) test(`password ${next === null ? "removal" : `invalid-short config (${next.length})`} revokes existing sessions`, async () => {
   const token = await password();
   config.adminPassword = next;
   await revoked(token);
   assert.equal(await exists(token), false);
+});
+
+test("九位管理员密码可登录并通过会话校验，错误密码仍被拒绝", async () => {
+  config.adminPassword = "trial-123";
+  config.environmentName = "production";
+  const token = await password(config.adminPassword);
+  const me = await principal(token);
+  assert.equal(me.dev, false);
+  assert.equal((await request("/api/auth/check", token)).status, 204);
+  assert.equal((await request("/api/admin/session-test", token, me.csrf)).status, 200);
+  await assert.rejects(passwordLogin("wrong-123", "/admin", undefined), /密码不对/);
+  config.adminPassword = "trial-12";
+  await assert.rejects(passwordLogin(config.adminPassword, "/admin", undefined), /至少 9 位/);
+  await revoked(token, me.csrf);
 });
 
 test("unchanged sessions preserve CSRF, and neither the password nor the token is stored", async () => {

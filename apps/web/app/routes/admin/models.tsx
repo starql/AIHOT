@@ -8,6 +8,7 @@ import { useAdminAction } from "../../features/admin/action";
 import { bj, money, num } from "../../features/admin/format";
 import { AdminPage, Badge, Button, Card, DataTable, Empty, Field, FilterChips, ReasonDialog, Select } from "../../features/admin/ui";
 import { webModules } from "../../site-modules";
+import { ChatgptConnection } from "../../features/admin/chatgpt";
 
 
 
@@ -41,6 +42,7 @@ export default function ModelsAdmin({ loaderData: m }: Route.ComponentProps) {
       actions={<FilterChips param="days" options={[{ value: "1", label: "24 小时" }, { value: "", label: "7 天" }, { value: "30", label: "30 天" }]} />}
     >
       <div className="grid gap-5">
+        <ChatgptConnection initial={m.chatgpt} />
         {m.capabilities.map((c) => {
           const total = c.usage.reduce((a, u) => a + u.calls, 0);
           return (
@@ -92,7 +94,7 @@ export default function ModelsAdmin({ loaderData: m }: Route.ComponentProps) {
                       label: "费用",
                       align: "right",
                       render: (u) =>
-                        u.actualCost !== null ? (
+                        u.subscription ? <span title="消耗 ChatGPT 订阅额度；不按 API 单价估算">订阅额度</span> : u.actualCost !== null ? (
                           `${money(u.actualCost)}${u.currency && u.currency !== "CNY" ? ` ${u.currency}` : ""}`
                         ) : u.estimate ? (
                           <span title="按用量 × 单价推算">≈ {money(u.estimate.amount)}{u.estimate.currency !== "CNY" ? ` ${u.estimate.currency}` : ""}</span>

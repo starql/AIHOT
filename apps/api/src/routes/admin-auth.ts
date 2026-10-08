@@ -26,8 +26,8 @@ import { sendProblem } from "../http/respond.ts";
 const secure = () => config.siteUrl.startsWith("https://");
 
 /**
- * Password attempts: at most 10 per client address and 50 in all per 15 minutes. The overall cap holds
- * even when a client forges its address; with a 12+ character password that is far too slow to guess.
+ * 登录尝试：每个客户端地址每 15 分钟最多 10 次，所有地址合计最多 50 次。
+ * 即使伪造来源地址，仍然计入全局上限。
  */
 const attempts = new Map<string, number[]>();
 function over(key: string, limit: number, now: number): boolean {

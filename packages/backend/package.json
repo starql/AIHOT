@@ -9,6 +9,7 @@
     "@aihot/contracts": "*",
     "@aihot/industry": "*",
     "@aihot/site": "*",
+    "@earendil-works/pi-ai": "1.1.0",
     "@mozilla/readability": "0.6.0",
     "@paralleldrive/cuid2": "3.3.0",
     "cheerio": "1.2.0",

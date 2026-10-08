@@ -7,6 +7,7 @@ import { PRESETS } from "@aihot/site/models";
 import { config, credential } from "../config.ts";
 import { sha256 } from "../lib/ids.ts";
 import { assertAccepted, paidRequest, ProviderRejectedError, rejectReceivedResponse } from "./receipts.ts";
+import { callChatgpt, chatgptModelId, chatgptSupportsVision, prepareChatgpt } from "./pi-ai.ts";
 
 export interface ModelSpec {
   key: string;
@@ -20,6 +21,7 @@ export interface ModelSpec {
   reasoningTokens?: number;
   jsonMode: boolean;
   vision?: boolean;
+  transport?: "pi-openai";
 }
 
 function extraFromEnv(value: string | undefined): Record<string, unknown> | undefined {
@@ -38,6 +40,11 @@ function reasoningTokensFromEnv(value: string | undefined): number | undefined {
 }
 
 export const MODELS: Record<string, ModelSpec> = {
+  chatgpt: {
+    key: "chatgpt", service: "chatgpt", transport: "pi-openai", baseUrlEnv: "", apiKeyEnv: "",
+    get model() { return chatgptModelId(); }, jsonMode: true,
+    get vision() { return chatgptSupportsVision(); },
+  },
   // Read from the environment at call time.
   default: {
     key: "default", service: "llm", baseUrlEnv: "LLM_BASE_URL", apiKeyEnv: "LLM_API_KEY",
@@ -132,7 +139,8 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
   if (!config.modelCallsEnabled) throw new Error("Model calls are disabled (MODEL_CALLS_ENABLED=false)");
   const baseUrl = credential("models", spec.baseUrlEnv);
   const apiKey = credential("models", spec.apiKeyEnv);
-  if (!baseUrl || !apiKey || !spec.model) throw new Error(`Model ${opts.model} is not configured (${spec.baseUrlEnv}, ${spec.apiKeyEnv}${spec.key === "default" ? ", LLM_MODEL" : ""})`);
+  if (spec.transport !== "pi-openai" && (!baseUrl || !apiKey || !spec.model)) throw new Error(`Model ${opts.model} is not configured (${spec.baseUrlEnv}, ${spec.apiKeyEnv}${spec.key === "default" ? ", LLM_MODEL" : ""})`);
+  const piInput = spec.transport === "pi-openai" ? await prepareChatgpt(spec.model, opts.user) : null;
 
   const temperature = opts.temperature ?? 0.2;
   const maxTokens = Math.max(opts.maxTokens ?? 1500, 512) + (spec.reasoningTokens ?? 0);
@@ -157,15 +165,16 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
       model: spec.model,
       purpose: opts.purpose,
       subject: opts.subject,
-      identity: { model: spec.model, promptVersion: opts.promptVersion, system: sha256(opts.system), user: sha256(userText), temperature, maxTokens, extra: spec.extra ?? null },
+      identity: { model: spec.model, ...(spec.transport ? { transport: spec.transport } : {}), promptVersion: opts.promptVersion, system: sha256(opts.system), user: sha256(userText), temperature, maxTokens, extra: spec.extra ?? null },
       requestSummary: { promptVersion: opts.promptVersion, systemHash: sha256(opts.system), userHash: sha256(userText), userChars: userText.length, temperature, maxTokens },
       attemptTag: opts.attemptTag,
     },
     async () => {
+      if (piInput) return callChatgpt(piInput, { system: opts.system, json: spec.jsonMode && opts.json !== false, maxTokens, timeoutMs: opts.timeoutMs ?? 120_000 });
       const started = Date.now();
       let res: Response;
       try {
-        res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+        res = await fetch(`${baseUrl!.replace(/\/$/, "")}/chat/completions`, {
           method: "POST",
           headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
           body: JSON.stringify(body),

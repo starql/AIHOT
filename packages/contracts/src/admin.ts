@@ -328,10 +328,19 @@ export interface AdminModelUsage {
   actualCost: number | null;
   currency: string | null;
   estimate: { amount: number; currency: string } | null;
+  subscription?: boolean;
+}
+
+export interface AdminChatgpt {
+  connected: boolean;
+  expiresAt: string | null;
+  model: string;
+  login: { id: string; status: "pending" | "success" | "error" | "cancelled"; authUrl: string | null; message: string; expiresAt: string } | null;
 }
 
 export interface AdminModels {
   days: number;
+  chatgpt: Pick<AdminChatgpt, "connected" | "expiresAt" | "model">;
   capabilities: Array<{ key: string; label: string; env: string; defaultModel: string; vision: boolean; current: { model: string; source: "admin" | "env" | "default" }; usage: AdminModelUsage[] }>;
   choices: Array<{ key: string; service: string; vision: boolean }>;
   history: Array<{ at: Timestamp; actor: string; subject: string; reason: string | null; before: { model: string; source: string } | null; after: { model: string; source: string } | null }>;

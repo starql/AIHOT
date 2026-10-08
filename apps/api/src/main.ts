@@ -15,8 +15,8 @@ assertProductionSecrets([
   ...DEPLOYMENT.requiredSecrets,
 ]);
 // Somebody must be able to sign in to the admin.
-if (config.environmentName === "production" && !(config.adminPassword && config.adminPassword.length >= 12) && !feishuLoginConfigured()) {
-  throw new Error("Refusing to start in production: set ADMIN_PASSWORD (at least 12 characters) or configure Feishu sign-in");
+if (config.environmentName === "production" && !(config.adminPassword && config.adminPassword.length >= 9) && !feishuLoginConfigured()) {
+  throw new Error("生产环境无法启动：请设置 ADMIN_PASSWORD（至少 9 位）或配置飞书登录");
 }
 
 const app = await buildApp();

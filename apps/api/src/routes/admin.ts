@@ -7,6 +7,7 @@ import { navCounts } from "@aihot/backend/admin/navigation";
 import { listAudit } from "@aihot/backend/audit";
 import { importSelectBenchRun, listSelectBenchRuns, selectBenchRun } from "@aihot/backend/admin/selectbench";
 import { modelsOverview, switchModel } from "@aihot/backend/admin/models";
+import { cancelChatgptLogin, chatgptStatus, disconnectChatgpt, startChatgptLogin, submitChatgptCallback, useChatgpt } from "@aihot/backend/admin/chatgpt";
 import { contentChain, overrideFields, rerun, searchContent, setSeoIndexed, setVisibility } from "@aihot/backend/admin/content";
 import { detachFromFact, mergeStories } from "@aihot/backend/events/corrections";
 import { banSource, eraseFeedback, feedbackScreenshot, listFeedback, unbanSource, updateFeedback } from "@aihot/backend/admin/feedback";
@@ -107,6 +108,15 @@ export function registerAdmin(app: FastifyInstance) {
 
 
   // Models and evaluation
+  app.get("/api/admin/chatgpt", adminHandler(async (_req, _reply, admin) => chatgptStatus(actorOf(admin))));
+  app.post("/api/admin/chatgpt/login", adminHandler(async (_req, _reply, admin) => startChatgptLogin(actorOf(admin))));
+  app.post("/api/admin/chatgpt/callback", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ id: string; url: string }>(req);
+    return submitChatgptCallback(actorOf(admin), String(b.id ?? ""), String(b.url ?? ""));
+  }));
+  app.post("/api/admin/chatgpt/cancel", adminHandler(async (_req, _reply, admin) => cancelChatgptLogin(actorOf(admin))));
+  app.post("/api/admin/chatgpt/disconnect", adminHandler(async (_req, _reply, admin) => disconnectChatgpt(actorOf(admin))));
+  app.post("/api/admin/chatgpt/use", adminHandler(async (_req, _reply, admin) => useChatgpt(actorOf(admin))));
   app.get("/api/admin/models", adminHandler(async (req) => modelsOverview(Math.min(90, Number(q(req).days) || 7))));
   app.post("/api/admin/models/:capability", adminHandler(async (req, _reply, admin) => {
     const b = body<{ model: string | null; reason: string }>(req);
